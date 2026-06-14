@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Food Tracker</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0a0c12;
+  --surface: #13161f;
+  --surface2: #1c2030;
+  --border: #252a3a;
+  --accent: #6ee7b7;
+  --accent2: #818cf8;
+  --text: #e2e8f0;
+  --muted: #4a5270;
+  --danger: #f87171;
+  --warn: #fbbf24;
+  --card-radius: 14px;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ── TOP-LEVEL LAYOUT: calorie bar | left col | right col ── */
+.app {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* LEFT: vertical calorie bar */
+.bar-panel {
+  width: 72px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 0 16px;
+}
+
+.bar-label-top {
+  font-size: 0.55rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.bar-track {
+  flex: 1;
+  width: 46px;
+  background: var(--surface2);
+  position: relative;
+  overflow: visible;
+  border: 3px solid #37705a;
+  box-shadow: 0 -6px 14px 2px rgba(110,231,183,0.18), 0 6px 14px 2px rgba(110,231,183,0.18);
+}
+
+.bar-track-inner {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.bar-goal-line {
+  position: absolute;
+  left: -8px; right: -8px;
+  height: 2px;
+  background: var(--warn);
+  top: 10%;
+  z-index: 4;
+  box-shadow: 0 0 6px rgba(251,191,36,0.7);
+}
+
+.bar-fill-ok {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  background: linear-gradient(to top, #059669, #6ee7b7);
+  transition: height 0.5s cubic-bezier(0.34,1.56,0.64,1);
+  z-index: 1;
+}
+.bar-fill-over {
+  position: absolute; bottom: 90%; left: 0; right: 0;
+  background: linear-gradient(to top, #dc2626, #f87171);
+  transition: height 0.5s cubic-bezier(0.34,1.56,0.64,1);
+  z-index: 2; height: 0;
+}
+.bar-fill-manual {
+  position: absolute; left: 0; right: 0;
+  background: linear-gradient(to top, #d97706, #fbbf24);
+  transition: height 0.5s cubic-bezier(0.34,1.56,0.64,1), bottom 0.5s cubic-bezier(0.34,1.56,0.64,1);
+  z-index: 3; height: 0;
+}
+
+.bar-bottom { margin-top: 10px; text-align: center; }
+.bar-kcal-num { font-size: 0.85rem; font-weight: 800; color: var(--accent); line-height: 1; transition: color 0.3s; }
+.bar-kcal-num.over { color: var(--danger); }
+.bar-kcal-label { font-size: 0.5rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
+.bar-remaining { font-size: 0.55rem; color: var(--muted); margin-top: 4px; text-align: center; line-height: 1.3; }
+
+/* MIDDLE: stats + log */
+.left-col {
+  width: 280px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.left-col-inner {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 14px 24px;
+}
+
+/* RIGHT: food buttons */
+.right-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.right-col-inner {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 12px 24px;
+}
+
+/* HEADER */
+header { margin-bottom: 14px; }
+header h1 { font-size: 1.1rem; font-weight: 700; color: var(--accent); letter-spacing: -0.3px; line-height: 1.2; }
+
+.week-goal {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 5px 10px; margin-top: 6px;
+}
+.week-goal-title { font-size: 0.65rem; font-weight: 700; color: var(--accent2); }
+.week-goal-dates { font-size: 0.58rem; color: var(--muted); margin-top: 1px; }
+.spinner { width: 12px; height: 12px; border: 2px solid var(--border); border-top-color: var(--accent2); border-radius: 50%; animation: spin 0.9s linear infinite; flex-shrink: 0; }
+@keyframes spin { to { transform: rotate(360deg); } }
+header p { color: var(--muted); font-size: 0.7rem; margin-top: 3px; }
+
+/* KCAL HERO */
+.kcal-hero { display: flex; align-items: baseline; gap: 6px; margin-bottom: 4px; }
+.kcal-big { font-size: 2.8rem; font-weight: 900; line-height: 1; color: var(--warn); letter-spacing: -2px; transition: color 0.3s; }
+.kcal-big.over { color: var(--danger); }
+.kcal-unit { font-size: 0.85rem; color: var(--muted); font-weight: 500; }
+.macros-row { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+.macro { font-size: 0.68rem; color: var(--muted); }
+.macro span { color: var(--text); font-weight: 600; }
+
+/* MANUAL BUTTON */
+.manual-row { margin-bottom: 10px; }
+.btn-manual {
+  background: var(--surface);
+  border: 1.5px solid #5b6490;
+  color: #9ba3d4;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: all 0.15s;
+  width: 100%;
+}
+.btn-manual:hover { background: #2a2f4a; color: #c0c8f0; border-color: #7880b0; }
+
+/* MANUAL MODAL */
+.manual-modal {
+  background: var(--surface);
+  border: 1.5px solid #5b6490;
+  border-radius: var(--card-radius);
+  padding: 14px;
+  margin-bottom: 12px;
+  display: none;
+  animation: slideIn 0.15s ease;
+}
+.manual-modal.open { display: block; }
+.manual-modal h3 { font-size: 0.82rem; font-weight: 600; color: #9ba3d4; margin-bottom: 3px; }
+.manual-modal p { font-size: 0.7rem; color: var(--muted); margin-bottom: 10px; }
+.manual-modal input {
+  width: 100%;
+  background: var(--surface2); border: 1.5px solid var(--border);
+  border-radius: 8px; color: var(--text); font-size: 0.9rem;
+  padding: 8px 12px; outline: none; transition: border-color 0.2s; margin-bottom: 6px;
+}
+.manual-modal input:focus { border-color: #5b6490; }
+
+/* GRAM MODAL — floats centered at top of right col */
+.gram-modal-right {
+  position: absolute;
+  top: 46px; /* just below the right-col-header */
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: none;
+  animation: slideIn 0.18s ease;
+  min-width: 340px;
+}
+.gram-modal-right.open { display: block; }
+.gram-modal-inner {
+  background: var(--surface);
+  border: 1.5px solid var(--accent);
+  border-radius: var(--card-radius);
+  padding: 14px 16px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.55);
+}
+.gram-modal-top {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.gram-modal h3 { font-size: 0.85rem; font-weight: 600; color: var(--accent); margin-bottom: 3px; }
+.gram-modal p { font-size: 0.72rem; color: var(--muted); margin-bottom: 10px; }
+.gram-row { display: flex; gap: 8px; align-items: center; }
+.gram-row input {
+  flex: 1;
+  background: var(--surface2); border: 1.5px solid var(--border);
+  border-radius: 8px; color: var(--text); font-size: 0.95rem;
+  padding: 9px 12px; outline: none; transition: border-color 0.2s;
+}
+.gram-row input:focus { border-color: var(--accent); }
+.btn-add {
+  background: var(--accent); color: #0a0c12;
+  border: none; border-radius: 8px;
+  padding: 9px 16px; font-size: 0.82rem; font-weight: 700;
+  cursor: pointer; white-space: nowrap; transition: opacity 0.15s;
+}
+.btn-add:hover { opacity: 0.85; }
+.unit-hint { font-size: 0.68rem; color: var(--accent2); margin-top: 6px; }
+
+/* NUMPAD */
+.numpad { margin-top: 8px; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 8px; width: fit-content; }
+.numpad-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+.np-btn {
+  background: var(--surface); border: 1px solid var(--border); color: var(--text);
+  border-radius: 7px; font-size: 1rem; font-weight: 600;
+  padding: 9px 0; cursor: pointer; min-width: 44px; text-align: center;
+  user-select: none; transition: background 0.1s;
+}
+.np-btn:hover { background: var(--border); }
+.np-btn:active { background: var(--accent); color: #0a0c12; }
+.np-btn.np-backspace { font-size: 0.8rem; color: var(--warn); }
+.np-btn.np-ok { background: var(--accent); color: #0a0c12; font-size: 0.8rem; border-color: var(--accent); }
+.np-btn.np-ok:hover { opacity: 0.85; }
+
+/* LOG */
+.log-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.log-title { font-size: 0.7rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; }
+.count-badge { display: inline-block; background: var(--surface2); color: var(--muted); border-radius: 20px; font-size: 0.65rem; font-weight: 700; padding: 1px 6px; margin-left: 4px; border: 1px solid var(--border); }
+.btn-clear { background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 7px; padding: 3px 9px; font-size: 0.67rem; cursor: pointer; transition: all 0.15s; }
+.btn-clear:hover { border-color: var(--danger); color: var(--danger); }
+.log-empty { text-align: center; color: var(--muted); font-size: 0.78rem; padding: 20px 0; border: 1.5px dashed var(--border); border-radius: var(--card-radius); }
+.log-item {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 7px 12px; margin-bottom: 6px;
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 8px; animation: slideIn 0.15s ease;
+}
+.log-item-name { font-size: 0.8rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.log-item-detail { font-size: 0.64rem; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.log-item-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.log-kcal { font-size: 0.95rem; font-weight: 800; color: var(--warn); white-space: nowrap; }
+.btn-del { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 0.85rem; padding: 0; transition: color 0.15s; }
+.btn-del:hover { color: var(--danger); }
+
+::-webkit-scrollbar { width: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
+
+/* ── FOOD BUTTON PANEL (right col) ── */
+.right-col-header {
+  padding: 12px 12px 6px;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.68rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  font-weight: 600;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+}
+
+/* Dimming overlay on right col */
+.right-col {
+  position: relative;
+}
+.right-col-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(10,12,18,0.52);
+  pointer-events: none;
+  z-index: 10;
+  transition: opacity 0.25s ease;
+}
+.right-col:hover .right-col-overlay {
+  opacity: 0;
+}
+
+/* Logged calorie flash in right-col header */
+.right-col-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.logged-flash {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--warn);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  letter-spacing: -0.5px;
+}
+.logged-flash.visible {
+  opacity: 1;
+}
+
+.food-panel {
+  margin-bottom: 4px;
+}
+
+.food-panel-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 5px 8px 4px;
+  cursor: pointer; user-select: none;
+  background: var(--surface2);
+  border-radius: 6px;
+  margin-bottom: 2px;
+}
+.food-panel-header:hover { background: rgba(255,255,255,0.05); }
+
+.category-label { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; }
+.category-toggle { font-size: 0.6rem; color: var(--muted); }
+
+.food-btn-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+}
+
+.food-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 0.66rem;
+  font-weight: 500;
+  padding: 4px 7px;
+  cursor: pointer;
+  margin: 2px;
+  border-radius: 5px;
+  white-space: nowrap;
+  transition: background 0.1s, border-color 0.1s, color 0.1s;
+  line-height: 1.2;
+}
+.food-btn:hover { background: var(--accent); color: #0a0c12; border-color: var(--accent); }
+.food-btn:active { transform: scale(0.95); }
+
+.collapsed .food-btn-grid { display: none; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- CALORIE BAR -->
+  <div class="bar-panel">
+    <div class="bar-label-top">2000<br>kcal</div>
+    <div class="bar-track">
+      <div class="bar-track-inner">
+        <div class="bar-fill-ok" id="barFillOk" style="height:0%"></div>
+        <div class="bar-fill-over" id="barFillOver" style="height:0%"></div>
+        <div class="bar-fill-manual" id="barFillManual" style="height:0%;bottom:0"></div>
+      </div>
+      <div class="bar-goal-line"></div>
+    </div>
+    <div class="bar-bottom">
+      <div class="bar-kcal-num" id="barNum">0</div>
+      <div class="bar-kcal-label">kcal</div>
+      <div class="bar-remaining" id="barRemaining">1800<br>left</div>
+    </div>
+  </div>
+
+  <!-- LEFT COL: stats + entry modals + log -->
+  <div class="left-col">
+    <div class="left-col-inner">
+      <header>
+        <h1>🥗 Slomi's Daily Calories Counter</h1>
+        <div class="week-goal">
+          <span class="spinner"></span>
+          <div>
+            <div class="week-goal-title">Week 1 goal: lose 0.5 kg</div>
+            <div class="week-goal-dates">14 June – 20 June</div>
+          </div>
+        </div>
+        <p>Goal: 1800 kcal · Limit: 2000 kcal</p>
+      </header>
+
+      <div class="kcal-hero">
+        <div class="kcal-big" id="totCal">0</div>
+        <div class="kcal-unit">kcal today</div>
+      </div>
+      <div class="macros-row">
+        <div class="macro">Carbs <span id="totCarb">0g</span></div>
+        <div class="macro">Fat <span id="totFat">0g</span></div>
+        <div class="macro">Protein <span id="totProt">0g</span></div>
+      </div>
+
+      <!-- Manual entry -->
+      <div class="manual-row">
+        <button class="btn-manual" id="manualBtn" onclick="openManualModal()">+ Manual entry</button>
+      </div>
+
+      <div class="manual-modal" id="manualModal">
+        <h3>Manual entry</h3>
+        <p>Enter item name and total calories</p>
+        <input type="text" id="manualName" placeholder="Item name">
+        <div class="gram-row">
+          <input type="number" id="manualKcal" placeholder="Calories" min="1" step="1">
+          <button class="btn-add" id="manualAddBtn">Add ↵</button>
+        </div>
+      </div>
+
+      <!-- Log -->
+      <div class="log-header">
+        <span class="log-title">Today's log <span class="count-badge" id="logCount">0</span></span>
+        <button class="btn-clear" onclick="clearLog()">Clear all</button>
+      </div>
+      <div id="logList">
+        <div class="log-empty">Tap a food button →</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT COL: food category buttons -->
+  <div class="right-col">
+    <div class="right-col-overlay"></div>
+    <div class="right-col-header">
+      <span id="loggedFlash" class="logged-flash"></span>
+      <span>🍽 Tap a food to log it</span>
+      <span id="loggedFlash2" class="logged-flash"></span>
+    </div>
+
+    <!-- Gram modal: floats centered at top of right col -->
+    <div class="gram-modal-right" id="gramModal">
+      <div class="gram-modal-inner">
+        <div class="gram-modal-top">
+          <div>
+            <h3 id="gramTitle">—</h3>
+            <p id="gramInfo">—</p>
+            <div class="gram-row">
+              <input type="number" id="gramInput" placeholder="Enter amount" min="1" step="1">
+              <button class="btn-add" id="addBtn" onclick="addEntry()">Add ↵</button>
+            </div>
+            <div class="unit-hint" id="unitHint"></div>
+          </div>
+          <div class="numpad" id="numpad">
+            <div class="numpad-grid">
+              <button class="np-btn" onclick="npPress('7')">7</button>
+              <button class="np-btn" onclick="npPress('8')">8</button>
+              <button class="np-btn" onclick="npPress('9')">9</button>
+              <button class="np-btn" onclick="npPress('4')">4</button>
+              <button class="np-btn" onclick="npPress('5')">5</button>
+              <button class="np-btn" onclick="npPress('6')">6</button>
+              <button class="np-btn" onclick="npPress('1')">1</button>
+              <button class="np-btn" onclick="npPress('2')">2</button>
+              <button class="np-btn" onclick="npPress('3')">3</button>
+              <button class="np-btn" onclick="npPress('0')">0</button>
+              <button class="np-btn np-backspace" onclick="npPress('⌫')">⌫</button>
+              <button class="np-btn np-ok" onclick="addEntry()">OK ↵</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="right-col-inner" id="foodCategories"></div>
+  </div>
+
+</div>
+
+<script>
+const GOAL = 1800, MAX = 2000;
+
+const FOODS = [
+  {name:"Chicken Breast",kcal:166,qty:100,unit:"g",carbs:0,fat:2,protein:25.2},
+  {name:"Boiled Egg",kcal:155,qty:100,unit:"g",carbs:1.1,fat:10.6,protein:12.6},
+  {name:"Egg",kcal:78,qty:1,unit:"pcs",carbs:0.55,fat:5.3,protein:6.3},
+  {name:"Egg Whites",kcal:52,qty:100,unit:"g",carbs:0.7,fat:0.2,protein:10.9},
+  {name:"Pork Mince",kcal:206,qty:100,unit:"g",carbs:0,fat:14.2,protein:19.6},
+  {name:"2 Sausage 7-11",kcal:251,qty:1,unit:"pkg",carbs:0,fat:17,protein:22},
+  {name:"3 Sausage Smoked Pork",kcal:210,qty:1,unit:"pkg",carbs:0.6,fat:19.2,protein:8.1},
+  {name:"KFC Cone",kcal:100,qty:1,unit:"cone",carbs:15,fat:3.1,protein:2.6},
+  {name:"Pad Thai Chicken",kcal:150,qty:100,unit:"g",carbs:25.3,fat:2.8,protein:7.1},
+  {name:"Apple",kcal:52,qty:100,unit:"g",carbs:13.8,fat:0.2,protein:0.3},
+  {name:"Banana",kcal:89,qty:100,unit:"g",carbs:22.8,fat:0.3,protein:1.1},
+  {name:"Mango",kcal:60,qty:100,unit:"g",carbs:15,fat:0.4,protein:0.8},
+  {name:"Papaya",kcal:43,qty:100,unit:"g",carbs:11,fat:1,protein:0.4},
+  {name:"Strawberries",kcal:33,qty:100,unit:"g",carbs:8,fat:0.3,protein:0.7},
+  {name:"Watermelon",kcal:30,qty:100,unit:"g",carbs:8,fat:0.2,protein:0.6},
+  {name:"Grapes",kcal:62,qty:100,unit:"g",carbs:15.8,fat:0.3,protein:0.6},
+  {name:"Pineapple",kcal:50,qty:100,unit:"g",carbs:13.1,fat:0.1,protein:0.5},
+  {name:"Guava",kcal:68,qty:100,unit:"g",carbs:14,fat:1,protein:2.6},
+  {name:"Durian",kcal:157,qty:100,unit:"g",carbs:29.3,fat:3.6,protein:2.9},
+  {name:"Pear",kcal:57,qty:100,unit:"g",carbs:15.2,fat:0.1,protein:0.4},
+  {name:"Orange",kcal:47,qty:100,unit:"g",carbs:11.8,fat:0.1,protein:0.9},
+  {name:"Avocado",kcal:160,qty:100,unit:"g",carbs:8.5,fat:14.7,protein:2},
+  {name:"Lemon",kcal:29,qty:100,unit:"g",carbs:9.3,fat:0.3,protein:1.1},
+  {name:"Dates",kcal:282,qty:100,unit:"g",carbs:75,fat:0.4,protein:2.5},
+  {name:"Rose Apple",kcal:25,qty:100,unit:"g",carbs:5.7,fat:0.3,protein:0.6},
+  {name:"Persimmon",kcal:126,qty:100,unit:"g",carbs:34,fat:0.4,protein:0.8},
+  {name:"Ber",kcal:60,qty:100,unit:"g",carbs:14.3,fat:0,protein:0.6},
+  {name:"Coconut Water",kcal:19,qty:100,unit:"g",carbs:3.7,fat:0.2,protein:0.7},
+  {name:"Tomato",kcal:18,qty:100,unit:"g",carbs:3.9,fat:0.2,protein:0.9},
+  {name:"Cucumber",kcal:15,qty:100,unit:"g",carbs:3.6,fat:0.1,protein:0.7},
+  {name:"Spinach",kcal:23,qty:100,unit:"g",carbs:3.6,fat:0.4,protein:2.9},
+  {name:"Carrot",kcal:41,qty:100,unit:"g",carbs:9.6,fat:0.2,protein:0.9},
+  {name:"Capsicum",kcal:31,qty:100,unit:"g",carbs:6,fat:0.3,protein:1},
+  {name:"Onion",kcal:40,qty:100,unit:"g",carbs:9.3,fat:0.1,protein:1.1},
+  {name:"Garlic",kcal:149,qty:100,unit:"g",carbs:33.1,fat:0.5,protein:6.4},
+  {name:"Ginger Root",kcal:80,qty:100,unit:"g",carbs:17.6,fat:0.7,protein:1.8},
+  {name:"Green Chili",kcal:40,qty:100,unit:"g",carbs:9.2,fat:0.2,protein:2},
+  {name:"Lettuce",kcal:15,qty:100,unit:"g",carbs:2.9,fat:0.2,protein:1.4},
+  {name:"Cabbage",kcal:25,qty:100,unit:"g",carbs:6,fat:0,protein:1},
+  {name:"Broccoli",kcal:34,qty:100,unit:"g",carbs:6.6,fat:0.4,protein:2.8},
+  {name:"Cauliflower",kcal:25,qty:100,unit:"g",carbs:5,fat:0.3,protein:1.9},
+  {name:"Eggplant",kcal:25,qty:100,unit:"g",carbs:5.9,fat:0.2,protein:1},
+  {name:"Pumpkin",kcal:26,qty:100,unit:"g",carbs:6.5,fat:0.1,protein:1},
+  {name:"Bitter Melon",kcal:16,qty:100,unit:"g",carbs:3.2,fat:0.2,protein:1.1},
+  {name:"Green Beans",kcal:31,qty:100,unit:"g",carbs:7,fat:0.2,protein:1.8},
+  {name:"Sweet Potato",kcal:86,qty:100,unit:"g",carbs:20.1,fat:0.1,protein:1.6},
+  {name:"Potato",kcal:77,qty:100,unit:"g",carbs:17,fat:0.1,protein:2},
+  {name:"Boiled Corn",kcal:96,qty:100,unit:"g",carbs:21,fat:1.6,protein:3.4},
+  {name:"Garden Peas",kcal:65,qty:100,unit:"g",carbs:9.8,fat:0.3,protein:5.9},
+  {name:"Asparagus",kcal:20,qty:100,unit:"g",carbs:3.9,fat:0.1,protein:2.2},
+  {name:"Zucchini",kcal:17,qty:100,unit:"g",carbs:3.1,fat:0.3,protein:0.3},
+  {name:"Celery",kcal:14,qty:100,unit:"g",carbs:2.97,fat:0.17,protein:0.69},
+  {name:"Spring Onion",kcal:32,qty:100,unit:"g",carbs:7,fat:0.2,protein:1.8},
+  {name:"Coriander",kcal:23,qty:100,unit:"g",carbs:0.15,fat:0.02,protein:0.09},
+  {name:"Bottle Gourd",kcal:15,qty:100,unit:"g",carbs:3.4,fat:0,protein:0.6},
+  {name:"Frozen Mixed Vegetables",kcal:65,qty:100,unit:"g",carbs:13.3,fat:1.5,protein:3},
+  {name:"Rice Basmati",kcal:130,qty:100,unit:"g",carbs:28.2,fat:0.3,protein:2.7},
+  {name:"Boiled Rice",kcal:135,qty:100,unit:"g",carbs:29.3,fat:0.3,protein:2.8},
+  {name:"Whole Wheat Bread",kcal:65,qty:1,unit:"slice",carbs:11,fat:1,protein:3},
+  {name:"Chakki Atta Flour",kcal:357,qty:100,unit:"g",carbs:75,fat:0.7,protein:12},
+  {name:"All Purpose Flour",kcal:364,qty:100,unit:"g",carbs:76.3,fat:1,protein:10.3},
+  {name:"Basen",kcal:190,qty:100,unit:"g",carbs:76,fat:4,protein:8},
+  {name:"Chick Peas",kcal:364,qty:100,unit:"g",carbs:61,fat:6,protein:19},
+  {name:"Kidney Beans",kcal:333,qty:100,unit:"g",carbs:61.3,fat:1.1,protein:22.5},
+  {name:"Moong Daal",kcal:348,qty:100,unit:"g",carbs:60,fat:1.2,protein:25},
+  {name:"Sabat Moong Dal",kcal:347,qty:100,unit:"g",carbs:59,fat:1,protein:24},
+  {name:"Chana Dal",kcal:330,qty:100,unit:"g",carbs:60,fat:2,protein:22},
+  {name:"White Urad Dal",kcal:343,qty:100,unit:"g",carbs:60,fat:1.4,protein:22.9},
+  {name:"Masoor Dal",kcal:371,qty:100,unit:"g",carbs:57.1,fat:2.9,protein:28.6},
+  {name:"Hummus",kcal:1366,qty:100,unit:"g",carbs:45.9,fat:7.2,protein:14.6},
+  {name:"Almonds",kcal:579,qty:100,unit:"g",carbs:21.5,fat:49.9,protein:21.1},
+  {name:"Peanuts",kcal:567,qty:100,unit:"g",carbs:16.1,fat:49.2,protein:25.8},
+  {name:"Walnut",kcal:654,qty:100,unit:"g",carbs:14,fat:65,protein:15},
+  {name:"Cashews",kcal:553,qty:100,unit:"g",carbs:30.2,fat:43.8,protein:18.2},
+  {name:"Pumpkin Seed",kcal:446,qty:100,unit:"g",carbs:53.8,fat:19.4,protein:18.6},
+  {name:"Sunflower Seeds",kcal:105,qty:1,unit:"pkg",carbs:3.6,fat:9.3,protein:3.7},
+  {name:"Salted Peanuts Tong Garden",kcal:270,qty:1,unit:"pkg",carbs:7,fat:22,protein:11},
+  {name:"Olive Oil",kcal:120,qty:1,unit:"tbsp",carbs:0,fat:13,protein:0},
+  {name:"Butter Blue Band",kcal:90,qty:1,unit:"tbsp",carbs:0,fat:10,protein:0},
+  {name:"Peanut Butter",kcal:576,qty:100,unit:"g",carbs:24.2,fat:48.5,protein:21.2},
+  {name:"Sauce Teriyaki",kcal:15,qty:1,unit:"tbsp",carbs:0.02,fat:0,protein:1},
+  {name:"Sesame Salad Dressing",kcal:55,qty:1,unit:"tbsp",carbs:1.5,fat:5,protein:0.5},
+  {name:"Smokey BBQ Sauce",kcal:30,qty:1,unit:"tbsp",carbs:7.4,fat:0,protein:0},
+  {name:"Tomato Ketchup Heinz",kcal:118,qty:100,unit:"g",carbs:29.4,fat:0,protein:0},
+  {name:"Strawberry Jam",kcal:35,qty:1,unit:"tbsp",carbs:9,fat:0,protein:0},
+  {name:"Meat Curry Masala MDH",kcal:289,qty:100,unit:"g",carbs:32,fat:12,protein:13.2},
+  {name:"Black Pepper",kcal:251,qty:100,unit:"g",carbs:64,fat:3.3,protein:10.4},
+  {name:"Milk Meiji",kcal:70,qty:100,unit:"ml",carbs:4.7,fat:4,protein:3},
+  {name:"Greek Yoghurt Dutchie",kcal:120,qty:1,unit:"pkg",carbs:18,fat:2,protein:7},
+  {name:"Yoghurt Natural",kcal:67,qty:100,unit:"g",carbs:8.7,fat:1,protein:5.3},
+  {name:"Evaporated Creamer Teapot Milk",kcal:148,qty:100,unit:"g",carbs:11.1,fat:8.3,protein:4.2},
+  {name:"Cheese Cheddar",kcal:404,qty:100,unit:"g",carbs:3.1,fat:33.3,protein:22.2},
+  {name:"Granola Dark Chocolate",kcal:486,qty:100,unit:"g",carbs:62.9,fat:20,protein:11.4},
+  {name:"Museli Multi Fruit",kcal:190,qty:100,unit:"g",carbs:38,fat:2,protein:4},
+  {name:"Quadrantini Wafer Biscuits",kcal:19,qty:1,unit:"pcs",carbs:2.4,fat:1,protein:0.3},
+  {name:"Butter Cookies Dansia",kcal:30,qty:1,unit:"biscuit",carbs:4,fat:1.4,protein:0.4},
+  {name:"Shrimp Snacks",kcal:110,qty:1,unit:"pkg",carbs:13,fat:6,protein:1},
+  {name:"Sausage Cheese Sandwich",kcal:280,qty:1,unit:"pkg",carbs:18,fat:17,protein:12},
+  {name:"Sausage Cheese Croissant",kcal:370,qty:1,unit:"pkg",carbs:26,fat:25,protein:11},
+  {name:"Jelly Liquid Strawberry",kcal:35,qty:1,unit:"pkg",carbs:8,fat:0,protein:2},
+  {name:"Red Jelly",kcal:90,qty:1,unit:"pkg",carbs:22,fat:0,protein:1},
+  {name:"Milo",kcal:395,qty:100,unit:"g",carbs:62.4,fat:7.9,protein:9.4},
+  {name:"Sugar (tbsp)",kcal:48,qty:1,unit:"tbsp",carbs:12.5,fat:0,protein:0},
+  {name:"Sugar (grams)",kcal:387,qty:100,unit:"g",carbs:100,fat:0,protein:0},
+  {name:"Tea",kcal:4,qty:1,unit:"tsp",carbs:1,fat:0,protein:0},
+  {name:"Yeast",kcal:13,qty:1,unit:"tsp",carbs:1.6,fat:0.3,protein:1.6},
+  {name:"Chang Beer Large",kcal:328,qty:1,unit:"bottle",carbs:22.7,fat:0,protein:2.9},
+  {name:"Leo Beer Large",kcal:315,qty:1,unit:"bottle",carbs:25,fat:0,protein:0},
+  {name:"Leo Beer Can",kcal:192,qty:1,unit:"can",carbs:18,fat:0,protein:0},
+  {name:"M-150",kcal:50,qty:1,unit:"bottle",carbs:13,fat:0,protein:0},
+];
+
+const CATEGORIES = [
+  { label:"🍗 Meat & Protein", color:"#f97316", names:["Chicken Breast","Boiled Egg","Egg","Egg Whites","Pork Mince","2 Sausage 7-11","3 Sausage Smoked Pork","KFC Cone","Pad Thai Chicken"] },
+  { label:"🥛 Dairy", color:"#67e8f9", names:["Milk Meiji","Greek Yoghurt Dutchie","Yoghurt Natural","Evaporated Creamer Teapot Milk","Cheese Cheddar"] },
+  { label:"☕ Drinks & Misc", color:"#94a3b8", names:["Sugar (tbsp)","Sugar (grams)","Tea","Yeast","Chang Beer Large","Leo Beer Large","Leo Beer Can","M-150"] },
+  { label:"🍎 Fruits", color:"#ec4899", names:["Apple","Banana","Mango","Papaya","Strawberries","Watermelon","Grapes","Pineapple","Guava","Durian","Pear","Orange","Avocado","Lemon","Dates","Rose Apple","Persimmon","Ber","Coconut Water"] },
+  { label:"🥦 Vegetables", color:"#22c55e", names:["Tomato","Cucumber","Spinach","Carrot","Capsicum","Onion","Garlic","Ginger Root","Green Chili","Lettuce","Cabbage","Broccoli","Cauliflower","Eggplant","Pumpkin","Bitter Melon","Green Beans","Sweet Potato","Potato","Boiled Corn","Garden Peas","Asparagus","Zucchini","Celery","Spring Onion","Coriander","Bottle Gourd","Frozen Mixed Vegetables"] },
+  { label:"🍚 Grains & Bread", color:"#eab308", names:["Rice Basmati","Boiled Rice","Whole Wheat Bread","Chakki Atta Flour","All Purpose Flour","Basen"] },
+  { label:"🫘 Legumes & Dal", color:"#a78bfa", names:["Chick Peas","Kidney Beans","Moong Daal","Sabat Moong Dal","Chana Dal","White Urad Dal","Masoor Dal","Hummus"] },
+  { label:"🥜 Nuts & Seeds", color:"#fb923c", names:["Almonds","Peanuts","Walnut","Cashews","Pumpkin Seed","Sunflower Seeds","Salted Peanuts Tong Garden"] },
+  { label:"🫙 Condiments & Oils", color:"#38bdf8", names:["Olive Oil","Butter Blue Band","Peanut Butter","Sauce Teriyaki","Sesame Salad Dressing","Smokey BBQ Sauce","Tomato Ketchup Heinz","Strawberry Jam","Meat Curry Masala MDH","Black Pepper"] },
+  { label:"🍪 Snacks & Sweets", color:"#f472b6", names:["Granola Dark Chocolate","Museli Multi Fruit","Quadrantini Wafer Biscuits","Butter Cookies Dansia","Shrimp Snacks","Sausage Cheese Sandwich","Sausage Cheese Croissant","Jelly Liquid Strawberry","Red Jelly","Milo"] },
+];
+
+const foodMap = {};
+FOODS.forEach(f => foodMap[f.name] = f);
+
+function renderCategories() {
+  const container = document.getElementById('foodCategories');
+  container.innerHTML = CATEGORIES.map((cat, ci) => {
+    const btns = cat.names.map(name => {
+      const f = foodMap[name];
+      if (!f) return '';
+      const idx = FOODS.indexOf(f);
+      return `<button class="food-btn" onclick="selectFood(${idx})" style="border-color:${cat.color}33">${name}</button>`;
+    }).join('');
+    return `
+      <div class="food-panel" id="cat${ci}">
+        <div class="food-panel-header" onclick="toggleCat(${ci})">
+          <span class="category-label" style="color:${cat.color}">${cat.label}</span>
+          <span class="category-toggle" id="toggle${ci}">▲</span>
+        </div>
+        <div class="food-btn-grid">${btns}</div>
+      </div>`;
+  }).join('');
+}
+
+function toggleCat(ci) {
+  const panel = document.getElementById('cat' + ci);
+  const tog = document.getElementById('toggle' + ci);
+  panel.classList.toggle('collapsed');
+  tog.textContent = panel.classList.contains('collapsed') ? '▼' : '▲';
+}
+
+renderCategories();
+
+// ── STATE ──
+let log = [];
+let selectedFood = null;
+
+// ── ELEMENTS ──
+const gramModal  = document.getElementById('gramModal');
+const gramInput  = document.getElementById('gramInput');
+const gramTitle  = document.getElementById('gramTitle');
+const gramInfo   = document.getElementById('gramInfo');
+const unitHint   = document.getElementById('unitHint');
+
+const manualModal = document.getElementById('manualModal');
+const manualName  = document.getElementById('manualName');
+const manualKcal  = document.getElementById('manualKcal');
+
+// ── FOOD SELECTION ──
+function selectFood(idx) {
+  const food = FOODS[idx];
+  selectedFood = food;                    // set BEFORE opening modal
+  gramTitle.textContent = food.name;
+  const isGram = food.unit === 'g' || food.unit === 'ml';
+  gramInfo.textContent = isGram
+    ? `${food.kcal} kcal per ${food.qty}g — enter grams eaten`
+    : `${food.kcal} kcal per ${food.qty} ${food.unit} — enter quantity`;
+  unitHint.textContent = isGram
+    ? `Enter weight in grams`
+    : `Unit: ${food.unit}  ·  1 ${food.unit} = ${food.kcal} kcal`;
+  gramInput.value = '';
+  gramModal.classList.add('open');
+  manualModal.classList.remove('open');
+  setTimeout(() => gramInput.focus(), 50);
+}
+
+// ── NUMPAD ──
+function npPress(val) {
+  if (val === '⌫') {
+    gramInput.value = gramInput.value.slice(0, -1);
+  } else {
+    gramInput.value += val;
+  }
+}
+
+// ── ADD FOOD ENTRY ──
+function addEntry() {
+  if (!selectedFood) return;
+  const raw = parseFloat(gramInput.value);
+  if (isNaN(raw) || raw <= 0) {
+    gramInput.style.borderColor = 'var(--danger)';
+    setTimeout(() => gramInput.style.borderColor = '', 800);
+    return;
+  }
+  const food = selectedFood;
+  const isGram = food.unit === 'g' || food.unit === 'ml';
+  const factor = isGram ? raw / food.qty : raw;
+  log.push({
+    id: Date.now(),
+    name: food.name,
+    amount: raw,
+    unit: isGram ? 'g' : food.unit,
+    kcal: Math.round(food.kcal * factor),
+    carbs: +(food.carbs * factor).toFixed(1),
+    fat:   +(food.fat   * factor).toFixed(1),
+    protein: +(food.protein * factor).toFixed(1),
+    manual: false,
+  });
+  const addedKcal = Math.round(food.kcal * factor);
+  selectedFood = null;
+  gramModal.classList.remove('open');
+  gramInput.value = '';
+  renderAll();
+  // Flash the kcal number in the center of the right-col header
+  const flash1 = document.getElementById('loggedFlash');
+  const flash2 = document.getElementById('loggedFlash2');
+  [flash1, flash2].forEach(el => {
+    el.textContent = '+' + addedKcal + ' kcal';
+    el.classList.add('visible');
+  });
+  clearTimeout(window._flashTimer);
+  window._flashTimer = setTimeout(() => {
+    [flash1, flash2].forEach(el => el.classList.remove('visible'));
+  }, 1800);
+}
+
+// ── MANUAL ENTRY ──
+function openManualModal() {
+  manualModal.classList.add('open');
+  gramModal.classList.remove('open');
+  selectedFood = null;
+  manualName.value = '';
+  manualKcal.value = '';
+  setTimeout(() => manualName.focus(), 50);
+}
+
+function closeManualModal() { manualModal.classList.remove('open'); }
+
+function addManualEntry() {
+  const name = manualName.value.trim();
+  const kcal = parseFloat(manualKcal.value);
+  if (!name || isNaN(kcal) || kcal <= 0) {
+    if (!name) manualName.style.borderColor = 'var(--danger)';
+    if (isNaN(kcal) || kcal <= 0) manualKcal.style.borderColor = 'var(--danger)';
+    setTimeout(() => { manualName.style.borderColor=''; manualKcal.style.borderColor=''; }, 800);
+    return;
+  }
+  log.push({ id: Date.now(), name, amount:'', unit:'', kcal: Math.round(kcal), carbs:0, fat:0, protein:0, manual:true });
+  closeManualModal();
+  renderAll();
+}
+
+document.getElementById('manualAddBtn').addEventListener('click', addManualEntry);
+manualKcal.addEventListener('keydown', e => { if (e.key === 'Enter') addManualEntry(); });
+manualName.addEventListener('keydown', e => { if (e.key === 'Enter') manualKcal.focus(); });
+gramInput.addEventListener('keydown', e => { if (e.key === 'Enter') addEntry(); });
+
+// ── DELETE / CLEAR ──
+function deleteEntry(id) { log = log.filter(e => e.id !== id); renderAll(); }
+function clearLog() { if (!log.length) return; log = []; renderAll(); }
+
+// ── RENDER ──
+function renderAll() {
+  const totals = log.reduce((a, e) => ({
+    kcal: a.kcal + e.kcal, carbs: a.carbs + e.carbs,
+    fat: a.fat + e.fat, protein: a.protein + e.protein
+  }), {kcal:0, carbs:0, fat:0, protein:0});
+
+  const kcal = Math.round(totals.kcal);
+  const isOver = kcal > GOAL;
+
+  document.getElementById('totCal').textContent = kcal;
+  document.getElementById('totCal').classList.toggle('over', isOver);
+  document.getElementById('totCarb').textContent = totals.carbs.toFixed(1) + 'g';
+  document.getElementById('totFat').textContent  = totals.fat.toFixed(1)   + 'g';
+  document.getElementById('totProt').textContent = totals.protein.toFixed(1) + 'g';
+
+  const barNum = document.getElementById('barNum');
+  barNum.textContent = kcal;
+  barNum.classList.toggle('over', isOver);
+
+  const remEl = document.getElementById('barRemaining');
+  if (kcal >= GOAL) {
+    remEl.innerHTML = `<span style="color:var(--danger)">+${kcal-GOAL}<br>over</span>`;
+  } else {
+    remEl.innerHTML = `${GOAL-kcal}<br>left`;
+  }
+
+  const normalKcal   = log.filter(e=>!e.manual).reduce((s,e)=>s+e.kcal,0);
+  const manualKcalSum = log.filter(e=>e.manual).reduce((s,e)=>s+e.kcal,0);
+  const okKcal       = Math.min(normalKcal, GOAL);
+  const overKcal     = Math.max(0, Math.min(normalKcal, MAX) - GOAL);
+  const normalTotal  = Math.min(normalKcal, MAX);
+  const manualVisible= Math.max(0, Math.min(normalTotal + manualKcalSum, MAX) - normalTotal);
+
+  document.getElementById('barFillOk').style.height    = (okKcal/MAX*100)+'%';
+  document.getElementById('barFillOver').style.height  = (overKcal/MAX*100)+'%';
+  const mEl = document.getElementById('barFillManual');
+  mEl.style.height = (manualVisible/MAX*100)+'%';
+  mEl.style.bottom = (normalTotal/MAX*100)+'%';
+
+  document.getElementById('logCount').textContent = log.length;
+  const el = document.getElementById('logList');
+  if (!log.length) {
+    el.innerHTML = `<div class="log-empty">Tap a food button →</div>`;
+    return;
+  }
+  el.innerHTML = [...log].reverse().map(e => `
+    <div class="log-item">
+      <div style="flex:1;min-width:0">
+        <div class="log-item-name">${e.name}</div>
+        ${e.unit ? `<div class="log-item-detail">${e.amount}${e.unit} · C:${e.carbs}g F:${e.fat}g P:${e.protein}g</div>` : ''}
+      </div>
+      <div class="log-item-right">
+        <span class="log-kcal" ${e.manual?'style="color:#fbbf24"':''}>${e.kcal}</span>
+        <button class="btn-del" onclick="deleteEntry(${e.id})">✕</button>
+      </div>
+    </div>`).join('');
+}
+
+// Close modals only on outside click — not on numpad/buttons inside
+document.addEventListener('click', e => {
+  if (!e.target.closest('#gramModal') && !e.target.closest('.food-btn')) {
+    gramModal.classList.remove('open');
+    selectedFood = null;
+  }
+
+  if (!e.target.closest('#manualModal') && !e.target.closest('#manualBtn')) {
+    closeManualModal();
+  }
+});
+</script>
+</body>
+</html>
